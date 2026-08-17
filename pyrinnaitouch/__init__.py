@@ -4,6 +4,7 @@
 
 from .system import RinnaiSystemStatus, RinnaiSystem
 from .unit_status import RinnaiUnitStatus
+from .topology import RinnaiTopology, ZoneCapabilities, ZoneControl
 from .const import (
     RinnaiSchedulePeriod,
     RinnaiCapabilities,
@@ -13,14 +14,17 @@ from .const import (
     TEMP_CELSIUS
 )
 
-__ALL__ = [
-    RinnaiSystemStatus,
-    RinnaiUnitStatus,
-    RinnaiSystem,
-    RinnaiSchedulePeriod,
-    RinnaiCapabilities,
-    RinnaiOperatingMode,
-    RinnaiSystemMode,
-    TEMP_CELSIUS,
-    TEMP_FAHRENHEIT
-    ]
+__all__ = [
+    "RinnaiCapabilities",
+    "RinnaiOperatingMode",
+    "RinnaiSchedulePeriod",
+    "RinnaiSystem",
+    "RinnaiSystemMode",
+    "RinnaiSystemStatus",
+    "RinnaiTopology",
+    "RinnaiUnitStatus",
+    "TEMP_CELSIUS",
+    "TEMP_FAHRENHEIT",
+    "ZoneCapabilities",
+    "ZoneControl",
+]

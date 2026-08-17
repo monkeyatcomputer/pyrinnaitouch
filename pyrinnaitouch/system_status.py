@@ -59,9 +59,14 @@ class RinnaiSystemStatus():
         """Handle the JSON response from the system."""
         try:
             #_LOGGER.debug(json.dumps(j[0], indent = 4))
-            self.set_config(get_attribute(status_json[0].get(SYSTEM), CONFIGURATION,None))
-            self.set_capabilities(get_attribute(status_json[0].get(SYSTEM), CAPABILITIES,None))
-            self.set_fault(get_attribute(status_json[0].get(SYSTEM), FAULT_INFO, None))
+            system_data = next(
+                (part[SYSTEM] for part in status_json if SYSTEM in part), None
+            )
+            if not isinstance(system_data, dict):
+                raise ValueError("Status does not contain a SYST object")
+            self.set_config(get_attribute(system_data, CONFIGURATION, None))
+            self.set_capabilities(get_attribute(system_data, CAPABILITIES, None))
+            self.set_fault(get_attribute(system_data, FAULT_INFO, None))
 
             parts = []
             for part in status_json:
@@ -116,10 +121,19 @@ class RinnaiSystemStatus():
 
             self.is_multi_set_point = y_n_to_bool(get_attribute(cfg, MULTI_SET_POINT, None))
             for zone in MAIN_ZONES:
-                self.zone_descriptions[zone] = get_attribute(cfg, "Z" + zone, None).strip()
+                description = get_attribute(cfg, "Z" + zone, None)
+                self.zone_descriptions[zone] = (
+                    description.strip() if isinstance(description, str) else None
+                )
 
-            self.firmware_version = get_attribute(cfg, FIRMWARE_VERSION, None).strip()
-            self.wifi_module_version = get_attribute(cfg, WIFI_MODULE_VERSION, None).strip()
+            firmware = get_attribute(cfg, FIRMWARE_VERSION, None)
+            wifi_version = get_attribute(cfg, WIFI_MODULE_VERSION, None)
+            self.firmware_version = (
+                firmware.strip() if isinstance(firmware, str) else None
+            )
+            self.wifi_module_version = (
+                wifi_version.strip() if isinstance(wifi_version, str) else None
+            )
 
     def set_fault(self, flt) -> None:
         """Parse and set fault state."""

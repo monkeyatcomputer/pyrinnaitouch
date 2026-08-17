@@ -26,7 +26,7 @@ UNIT_ZONE_SET_TEMP = '{{"{unit_id}": {{"Z{zone}O": {{"SP": "{temp}" }} }} }}'
 UNIT_ZONE_SET_MANUAL = '{{"{unit_id}": {{"Z{zone}O": {{"OP": "M" }} }} }}'
 UNIT_ZONE_SET_AUTO = '{{"{unit_id}": {{"Z{zone}O": {{"OP": "A" }} }} }}'
 UNIT_ZONE_ADVANCE = '{{"{unit_id}": {{"Z{zone}O": {{"AO": "A" }} }} }}'
-UNIT_ZONE_ADVANCE_CANCEL = '{{"{unit_id}": {{"Z{zone}O": {{"AO": "A" }} }} }}'
+UNIT_ZONE_ADVANCE_CANCEL = '{{"{unit_id}": {{"Z{zone}O": {{"AO": "N" }} }} }}'
 
 UNIT_COMMANDS = [
     UNIT_ON_CMD,

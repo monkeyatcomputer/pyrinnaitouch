@@ -135,12 +135,17 @@ class RinnaiUnitStatus():
         ) -> None:
         """Parse operational part of JSON."""
         self.set_capability(capability)
-        self.set_config(get_attribute(status_json[1].get(self.unit_id),CONFIGURATION,None))
+        unit_data = next(
+            (part[self.unit_id] for part in status_json if self.unit_id in part), None
+        )
+        if not isinstance(unit_data, dict):
+            raise ValueError(f"Status does not contain a {self.unit_id} object")
+        self.set_config(get_attribute(unit_data, CONFIGURATION, None))
 
         if capability == RinnaiCapabilities.EVAP:
-            self.parse_evap_gso(set_parent_status, status_json)
+            self.parse_evap_gso(set_parent_status, unit_data)
         else:
-            oop = get_attribute(status_json[1].get(self.unit_id),OVERALL_OPERATION,None)
+            oop = get_attribute(unit_data, OVERALL_OPERATION, None)
             if not oop:
                 # Probably an error
                 _LOGGER.error("No OOP - Not happy, Jan")
@@ -192,10 +197,10 @@ class RinnaiUnitStatus():
                 # ZXS => *AE (calling for heat), FS (fan active), PH (preheat), *MT (temp),
                 #         AT (schedule_period), AZ (advance_period)
                 for zoneid in ALL_ZONES:
-                    zone = get_attribute(status_json[1].get(self.unit_id),"Z"+zoneid+"O",None)
+                    zone = get_attribute(unit_data, "Z" + zoneid + "O", None)
                     self.parse_zone_operation(is_multi_set_point, zoneid, zone)
 
-                    zone = get_attribute(status_json[1].get(self.unit_id),"Z"+zoneid+"S",None)
+                    zone = get_attribute(unit_data, "Z" + zoneid + "S", None)
                     self.parse_zone_state(is_multi_set_point, zoneid, zone)
 
     def parse_zone_state(self, is_multi_set_point: bool, zoneid: str, zone: Any) -> None:
@@ -231,9 +236,9 @@ class RinnaiUnitStatus():
                 self.zones[zoneid].set_advanced(get_attribute(zone,SCHEDULE_OVERRIDE, None))
                 self.zones[zoneid].set_mode(get_attribute(zone,OPERATING_PROGRAM,None))
 
-    def parse_standard_gso(self, status_json: Any) -> None:
+    def parse_standard_gso(self, unit_data: Any) -> None:
         """Parse the GSO part of the JSON for heaters and coolers"""
-        gso = get_attribute(status_json[1].get(self.unit_id),GENERAL_SYSTEM_OPERATION,None)
+        gso = get_attribute(unit_data, GENERAL_SYSTEM_OPERATION, None)
         if not gso:
             # Probably an error
             _LOGGER.error("No GSO when heater on. Not happy, Jan")
@@ -249,7 +254,7 @@ class RinnaiUnitStatus():
 
             self.set_advanced(get_attribute(gso,SCHEDULE_OVERRIDE,None))
 
-            gss = get_attribute(status_json[1].get(self.unit_id),GENERAL_SYSTEM_STATUS,None)
+            gss = get_attribute(unit_data, GENERAL_SYSTEM_STATUS, None)
             if not gss:
                 _LOGGER.error("No GSS here")
             else:
@@ -271,11 +276,11 @@ class RinnaiUnitStatus():
     def parse_evap_gso(
             self,
             set_parent_status: Callable,
-            status_json: Any
+            unit_data: Any
             ) -> None:
         """Parse the GSO part of the JSON for evaps"""
         # no multi, there's always a GSO
-        gso = get_attribute(status_json[1].get(self.unit_id),GENERAL_SYSTEM_OPERATION,None)
+        gso = get_attribute(unit_data, GENERAL_SYSTEM_OPERATION, None)
         if not gso:
             _LOGGER.error("No GSO here")
         else:
@@ -314,7 +319,7 @@ class RinnaiUnitStatus():
                             y_n_to_bool(get_attribute(gso,"Z"+zoneid+USER_ENABLED,False))
 
 
-                gss = get_attribute(status_json[1].get(self.unit_id),GENERAL_SYSTEM_STATUS,None)
+                gss = get_attribute(unit_data, GENERAL_SYSTEM_STATUS, None)
                 if not gss:
                     _LOGGER.error("No GSS here")
                 else:

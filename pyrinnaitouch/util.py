@@ -5,7 +5,10 @@ from .const import RinnaiSchedulePeriod
 
 def get_attribute(data: Any, attribute: str, default_value: Any) -> Any:
     """get json attriubte from data."""
-    return data.get(attribute) or default_value
+    if not isinstance(data, dict):
+        return default_value
+    value = data.get(attribute)
+    return default_value if value is None else value
 
 def y_n_to_bool(str_arg: str) -> bool:
     """Convert Rinnai YN to Bool"""

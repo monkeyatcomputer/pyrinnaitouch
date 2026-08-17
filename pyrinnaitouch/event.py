@@ -1,10 +1,16 @@
-"""Module to capture event handling"""
+"""Module to capture event handling."""
+
+import logging
+
 try:
     from typing import Self
 except ImportError:
     from typing_extensions import Self
 
-class Event():
+_LOGGER = logging.getLogger(__name__)
+
+
+class Event:
     """Simple event class."""
 
     def __init__(self) -> None:
@@ -22,6 +28,9 @@ class Event():
 
     def __call__(self, *args, **keywargs) -> None:
         """Call event handler."""
-        for eventhandler in self.__eventhandlers:
+        for eventhandler in tuple(self.__eventhandlers):
             if eventhandler is not None:
-                eventhandler(*args, **keywargs)
+                try:
+                    eventhandler(*args, **keywargs)
+                except Exception:  # pylint: disable=broad-exception-caught
+                    _LOGGER.exception("Unhandled exception in event handler")
