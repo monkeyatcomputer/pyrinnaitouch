@@ -10,7 +10,11 @@ from .const import (
     COOLING_ADDON,
     COOLING_EVAPORATIVE,
     FAULT_DETECTED,
+    FAULT_APPLIANCE,
+    FAULT_CODE,
     FAULT_INFO,
+    FAULT_SEVERITY,
+    FAULT_UNIT,
     FIRMWARE_VERSION,
     GAS_HEATING,
     MAIN_ZONES,
@@ -53,6 +57,10 @@ class RinnaiSystemStatus():
 
         #faults
         self.has_fault: bool = False
+        self.fault_appliance: Optional[str] = None
+        self.fault_unit: Optional[str] = None
+        self.fault_severity: Optional[str] = None
+        self.fault_code: Optional[str] = None
         self.is_timesetting: bool = False
 
     def handle_status(self, status_json: Any) -> bool:
@@ -142,6 +150,10 @@ class RinnaiSystemStatus():
             _LOGGER.error("No FLT - Not happy, Jan")
         else:
             self.has_fault = y_n_to_bool(get_attribute(flt, FAULT_DETECTED, None))
+            self.fault_appliance = get_attribute(flt, FAULT_APPLIANCE, None)
+            self.fault_unit = get_attribute(flt, FAULT_UNIT, None)
+            self.fault_severity = get_attribute(flt, FAULT_SEVERITY, None)
+            self.fault_code = get_attribute(flt, FAULT_CODE, None)
 
     def set_capabilities(self, avm: Any) -> None:
         """Parse and set system capabilities, e.g. heater, cooler, evap."""

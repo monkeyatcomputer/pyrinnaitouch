@@ -26,10 +26,12 @@ from .const import (
     OPERATING_STATE,
     OVERALL_OPERATION,
     PREHEATING,
+    PRE_SLEEP_ENABLED,
     PREWETTING,
     PUMP_OPERATING,
     PUMP_STATE,
     SCHEDULE_OVERRIDE,
+    SCHEDULE_DAY_GROUP,
     SCHEDULE_PERIOD,
     SET_POINT,
     STATE_FAN_ONLY,
@@ -39,6 +41,7 @@ from .const import (
     USER_ENABLED,
     RinnaiCapabilities,
     RinnaiOperatingMode,
+    RinnaiScheduleDayGroup,
     RinnaiSchedulePeriod,
     RinnaiUnitId
     )
@@ -70,6 +73,8 @@ class RinnaiUnitStatus():
         self.schedule_period: RinnaiSchedulePeriod = RinnaiSchedulePeriod.NONE
         self.advance_period: RinnaiSchedulePeriod = RinnaiSchedulePeriod.NONE
         self.advanced: bool = False
+        self.pre_sleep_enabled: bool = False
+        self.schedule_day_group = RinnaiScheduleDayGroup.NONE
         self.fan_on: bool = False
         self.water_pump_on: bool = False
         self.prewetting: bool = False
@@ -347,6 +352,14 @@ class RinnaiUnitStatus():
             _LOGGER.error("No CFG - Not happy, Jan")
 
         else:
+            self.pre_sleep_enabled = y_n_to_bool(
+                get_attribute(cfg, PRE_SLEEP_ENABLED, None)
+            )
+            day_group = get_attribute(cfg, SCHEDULE_DAY_GROUP, None)
+            try:
+                self.schedule_day_group = RinnaiScheduleDayGroup(day_group)
+            except ValueError:
+                self.schedule_day_group = RinnaiScheduleDayGroup.NONE
             for zoneid in ALL_ZONES:
                 if y_n_to_bool(get_attribute(cfg, "Z"+zoneid+"IS", None)):
                     self.zones[zoneid] = Zone(zoneid)

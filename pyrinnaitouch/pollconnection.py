@@ -93,6 +93,7 @@ class RinnaiPollConnection:  # pylint: disable=too-many-instance-attributes,too-
 
         # These don't get created until start_thread is called
         self._socket: socket.socket = None
+        self._socket_lock = threading.Lock()
         self._socketthread: threading.Thread = None
         self._socketstate = RinnaiConnectionState.IDLE
 
@@ -249,17 +250,19 @@ class RinnaiPollConnection:  # pylint: disable=too-many-instance-attributes,too-
 
     def _close_socket(self) -> None:
         """Close the current TCP socket, if any."""
-        if self._socket is None:
+        with self._socket_lock:
+            current_socket = self._socket
+            self._socket = None
+        if current_socket is None:
             return
         try:
-            self._socket.shutdown(socket.SHUT_RDWR)
+            current_socket.shutdown(socket.SHUT_RDWR)
         except OSError:
             pass
         try:
-            self._socket.close()
+            current_socket.close()
         except OSError:
             pass
-        self._socket = None
 
     def _monitor_socket_and_queue(self) -> None:
         # Create the selector and register for read events on the socket and the send
@@ -490,9 +493,11 @@ class RinnaiPollConnection:  # pylint: disable=too-many-instance-attributes,too-
         while not self._thread_exit_flag:
             try:
                 self._update_socket_state(RinnaiConnectionState.CONNECTING)
-                self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                self._socket.settimeout(5)
-                self._socket.connect((self._ip_address, self._port))
+                candidate_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                with self._socket_lock:
+                    self._socket = candidate_socket
+                candidate_socket.settimeout(5)
+                candidate_socket.connect((self._ip_address, self._port))
 
                 # Reset the timestamps and command sequence number
                 self._last_command_time = time.time()
@@ -503,7 +508,7 @@ class RinnaiPollConnection:  # pylint: disable=too-many-instance-attributes,too-
                 self._frame_parser.reset()
 
                 # Switch to non-blocking mode.
-                self._socket.settimeout(0)
+                candidate_socket.settimeout(0)
                 return
 
             except ConnectionRefusedError:

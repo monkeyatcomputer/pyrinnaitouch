@@ -38,6 +38,28 @@ Command coroutines complete after the controller acknowledges the matching seque
 
 The topology object retains zones from earlier modes because the bridge can report a different list after a mode change.
 
+## Schedule programming
+
+`RinnaiSystem.set_schedule_period()` programs one period in the active heating
+or add-on cooling schedule. Pass a `RinnaiScheduleDay`,
+`RinnaiSchedulePeriod`, 24-hour start time, and integer setpoint. MTSP systems
+also require a zone. Single-set-point systems can optionally receive a list of
+zones enabled for the period.
+
+The library validates the day against the grouping reported by the controller,
+serializes concurrent schedule changes, and exits programming mode even when a
+field update fails. Values below 8 disable the period, matching the bridge API.
+
+```python
+await system.set_schedule_period(
+    RinnaiScheduleDay.WEEKDAYS,
+    RinnaiSchedulePeriod.RETURN,
+    "17:30",
+    22,
+    zone="A",
+)
+```
+
 ## Credits
 
 Thank you to the maintainers and contributors of [`funtastix/pyrinnaitouch`](https://github.com/funtastix/pyrinnaitouch) and [`lazdavila/pescea`](https://github.com/lazdavila/pescea), whose work forms the foundation of this project.

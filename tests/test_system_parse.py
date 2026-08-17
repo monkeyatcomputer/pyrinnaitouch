@@ -23,3 +23,22 @@ def test_status_objects_do_not_depend_on_array_order():
     assert status.handle_status(list(reversed(payload)))
     assert status.mode == RinnaiSystemMode.COOLING
     assert set(status.unit_status.zones) == {"A", "B"}
+
+
+def test_fault_details_are_parsed():
+    payload = json.loads(get_test_json())
+    payload[0]["SYST"]["FLT"] = {
+        "AV": "Y",
+        "GP": "H",
+        "UT": "02",
+        "TP": "L",
+        "CD": "35",
+    }
+    status = RinnaiSystemStatus()
+
+    assert status.handle_status(payload)
+    assert status.has_fault
+    assert status.fault_appliance == "H"
+    assert status.fault_unit == "02"
+    assert status.fault_severity == "L"
+    assert status.fault_code == "35"

@@ -28,6 +28,13 @@ UNIT_ZONE_SET_AUTO = '{{"{unit_id}": {{"Z{zone}O": {{"OP": "A" }} }} }}'
 UNIT_ZONE_ADVANCE = '{{"{unit_id}": {{"Z{zone}O": {{"AO": "A" }} }} }}'
 UNIT_ZONE_ADVANCE_CANCEL = '{{"{unit_id}": {{"Z{zone}O": {{"AO": "N" }} }} }}'
 
+# Schedule programming uses APS for single-set-point systems and APZ for
+# multi-set-point zones. The bridge reports the selected schedule after each
+# individual field is written.
+UNIT_SCHEDULE_COMMAND = (
+    '{{"{unit_id}": {{"{schedule}": {{"{key}": "{value}" }} }} }}'
+)
+
 UNIT_COMMANDS = [
     UNIT_ON_CMD,
     UNIT_OFF_CMD,
@@ -44,7 +51,8 @@ UNIT_COMMANDS = [
     UNIT_ZONE_SET_AUTO,
     UNIT_ZONE_ADVANCE,
     UNIT_ZONE_ADVANCE_CANCEL,
-    UNIT_CIRC_FAN_SPEED
+    UNIT_CIRC_FAN_SPEED,
+    UNIT_SCHEDULE_COMMAND,
 ]
 
 # Evap Cooling commands

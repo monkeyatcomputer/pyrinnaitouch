@@ -1,6 +1,7 @@
 """Constants and enumerations"""
 from enum import Enum, Flag
 
+
 class RinnaiSystemMode(Enum):
     """Define system modes."""
     HEATING = 1
@@ -9,11 +10,13 @@ class RinnaiSystemMode(Enum):
     RC = 4
     NONE = 5
 
+
 class RinnaiOperatingMode(Enum):
     """Define unit operating modes."""
     NONE = 0
     MANUAL = 1
     AUTO = 2
+
 
 class RinnaiCapabilities(Flag):
     """Define system capabilities."""
@@ -21,6 +24,7 @@ class RinnaiCapabilities(Flag):
     HEATER = 1
     COOLER = 2
     EVAP = 4
+
 
 class RinnaiSchedulePeriod(Enum):
     """Define system schedule time periods."""
@@ -33,6 +37,29 @@ class RinnaiSchedulePeriod(Enum):
     RETURN = "R"
     PRE_SLEEP = "P"
     SLEEP = "S"
+
+
+class RinnaiScheduleDay(Enum):
+    """Define the day selection used by a controller schedule."""
+    MONDAY = "MON"
+    TUESDAY = "TUE"
+    WEDNESDAY = "WED"
+    THURSDAY = "THU"
+    FRIDAY = "FRI"
+    SATURDAY = "SAT"
+    SUNDAY = "SUN"
+    WEEKDAYS = "weekdays"
+    WEEKENDS = "weekends"
+    ALL_DAYS = "all_days"
+
+
+class RinnaiScheduleDayGroup(Enum):
+    """Define how days are grouped in a controller schedule."""
+    NONE = None
+    INDIVIDUAL = "D"
+    WEEKDAYS_WEEKENDS = "W"
+    ALL_DAYS = "A"
+
 
 class RinnaiUnitId(Enum):
     """Define unit ids."""
@@ -64,6 +91,10 @@ CONFIGURATION = "CFG"
 CAPABILITIES = "AVM"
 FAULT_INFO = "FLT"
 FAULT_DETECTED = "AV"
+FAULT_APPLIANCE = "GP"
+FAULT_UNIT = "UT"
+FAULT_SEVERITY = "TP"
+FAULT_CODE = "CD"
 
 GAS_HEATING = "HG"
 COOLING_ADDON = "CG"
@@ -71,6 +102,8 @@ COOLING_EVAPORATIVE = "EC"
 MODULE_ENABLED = "Y"
 
 MULTI_SET_POINT = "MTSP"
+PRE_SLEEP_ENABLED = "PS"
+SCHEDULE_DAY_GROUP = "DG"
 
 FIRMWARE_VERSION = "VR"
 WIFI_MODULE_VERSION = "CV"
