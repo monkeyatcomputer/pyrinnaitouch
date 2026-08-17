@@ -12,6 +12,7 @@ from pyrinnaitouch.const import (
     RinnaiSchedulePeriod,
     RinnaiSystemMode,
 )
+from pyrinnaitouch.pollconnection import RinnaiConnectionNotReadyError
 from pyrinnaitouch.system import RinnaiSystem
 from pyrinnaitouch.system_status import RinnaiSystemStatus
 from pyrinnaitouch.topology import RinnaiTopology
@@ -269,3 +270,21 @@ def test_schedule_response_matcher_rejects_stale_selection():
             {"HGOM": {"OOP": {"ST": "N"}, "APS": {"AV": "N"}}},
         ]
     )
+
+
+def test_interrupted_schedule_read_preserves_cancellation_when_connection_closes():
+    system = make_system(
+        multi_set_point=True,
+        day_group=RinnaiScheduleDayGroup.ALL_DAYS,
+        zones={"A"},
+    )
+    system._schedule_condition = threading.Condition()
+    system._schedule_generation = 0
+    system.send_command.side_effect = [
+        True,
+        asyncio.CancelledError(),
+        RinnaiConnectionNotReadyError("Bridge status stream is not ready"),
+    ]
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(system.async_read_schedule(zone="A"))

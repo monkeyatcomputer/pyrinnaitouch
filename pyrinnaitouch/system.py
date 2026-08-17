@@ -23,7 +23,7 @@ try:
 except ImportError:
     from typing_extensions import Self
 
-from .pollconnection import RinnaiPollConnection
+from .pollconnection import RinnaiConnectionError, RinnaiPollConnection
 from .event import Event
 from .system_status import RinnaiSystemStatus
 from .schedule import RinnaiSchedule, RinnaiScheduleEntry
@@ -721,16 +721,25 @@ class RinnaiSystem:
             except Exception as err:  # pylint: disable=broad-except
                 scan_error = err
             finally:
-                exited = await asyncio.shield(
-                    self.send_command(
-                        command_template.format(
-                            unit_id=unit_id,
-                            schedule=schedule,
-                            key=exit_command[0],
-                            value=exit_command[1],
+                try:
+                    exited = await asyncio.shield(
+                        self.send_command(
+                            command_template.format(
+                                unit_id=unit_id,
+                                schedule=schedule,
+                                key=exit_command[0],
+                                value=exit_command[1],
+                            )
                         )
                     )
-                )
+                except RinnaiConnectionError:
+                    if scan_error is None:
+                        raise
+                    exited = False
+                    _LOGGER.debug(
+                        "Could not exit schedule access after the scan was interrupted",
+                        exc_info=True,
+                    )
 
             if scan_error is not None:
                 raise scan_error

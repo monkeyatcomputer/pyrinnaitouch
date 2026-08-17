@@ -329,8 +329,11 @@ class RinnaiPollConnection:  # pylint: disable=too-many-instance-attributes,too-
                             )
 
                     except OSError as ose:
-                        _LOGGER.error("Socket error on recv: %s. Reconnecting", ose)
-                        self._update_socket_state(RinnaiConnectionState.IDLE)
+                        if not self._thread_exit_flag:
+                            _LOGGER.error(
+                                "Socket error on recv: %s. Reconnecting", ose
+                            )
+                            self._update_socket_state(RinnaiConnectionState.IDLE)
 
                 if mask & selectors.EVENT_WRITE:
                     # We are able to write to the socket, and have something to say.
@@ -429,8 +432,9 @@ class RinnaiPollConnection:  # pylint: disable=too-many-instance-attributes,too-
                     len(self._writebuffer),
                 )
         except OSError as ose:
-            _LOGGER.error("Socket error on send: %s. Reconnecting", ose)
-            self._update_socket_state(RinnaiConnectionState.IDLE)
+            if not self._thread_exit_flag:
+                _LOGGER.error("Socket error on send: %s. Reconnecting", ose)
+                self._update_socket_state(RinnaiConnectionState.IDLE)
 
     def _process_received_data(self) -> None:
         received = bytes(self._readbuffer)
