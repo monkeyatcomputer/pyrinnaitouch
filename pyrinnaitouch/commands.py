@@ -67,6 +67,8 @@ EVAP_FAN_OFF = '{"ECOM": {"GSO": {"FS": "F" } } }'
 EVAP_FAN_SPEED = '{{"ECOM": {{"GSO": {{"FL": "{speed}" }} }} }}' # 1 - 16
 
 EVAP_SET_COMFORT = '{{"ECOM": {{"GSO": {{"SP": "{comfort}" }} }} }}'
+EVAP_SET_AUTO = '{"ECOM": {"GSO": {"OP": "A" } } }'
+EVAP_SET_MANUAL = '{"ECOM": {"GSO": {"OP": "M" } } }'
 
 EVAP_ZONE_ON = '{{"ECOM": {{"GSO": {{"Z{zone}UE": "Y" }} }} }}'
 EVAP_ZONE_OFF = '{{"ECOM": {{"GSO": {{"Z{zone}UE": "N" }} }} }}'
@@ -84,6 +86,8 @@ EVAP_COMMANDS = [
     EVAP_FAN_OFF,
     EVAP_FAN_SPEED,
     EVAP_SET_COMFORT,
+    EVAP_SET_AUTO,
+    EVAP_SET_MANUAL,
     EVAP_ZONE_ON,
     EVAP_ZONE_OFF,
     EVAP_ZONE_SET_MANUAL,

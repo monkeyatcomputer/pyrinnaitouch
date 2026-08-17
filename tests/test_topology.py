@@ -1,5 +1,8 @@
 """Tests for mode-aware zone capabilities."""
 
+import asyncio
+from unittest.mock import AsyncMock
+
 from pyrinnaitouch.const import RinnaiSystemMode
 from pyrinnaitouch.commands import UNIT_ZONE_ADVANCE_CANCEL
 from pyrinnaitouch.system import RinnaiSystem
@@ -93,3 +96,18 @@ def test_mtsp_system_uses_zone_schedules_not_a_unit_schedule():
 
 def test_advance_cancel_command_clears_override():
     assert '"AO": "N"' in UNIT_ZONE_ADVANCE_CANCEL
+
+
+def test_evap_operating_mode_commands_use_ecom():
+    system = RinnaiSystem.__new__(RinnaiSystem)
+    system._status = RinnaiSystemStatus()
+    system._status.mode = RinnaiSystemMode.EVAP
+    system.send_command = AsyncMock(return_value=True)
+
+    assert asyncio.run(system.set_evap_auto())
+    assert asyncio.run(system.set_evap_manual())
+
+    assert [call.args[0] for call in system.send_command.await_args_list] == [
+        '{"ECOM": {"GSO": {"OP": "A" } } }',
+        '{"ECOM": {"GSO": {"OP": "M" } } }',
+    ]

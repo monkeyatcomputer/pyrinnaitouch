@@ -36,6 +36,8 @@ from .commands import (
     EVAP_FAN_OFF,
     EVAP_FAN_SPEED,
     EVAP_SET_COMFORT,
+    EVAP_SET_AUTO,
+    EVAP_SET_MANUAL,
     EVAP_ZONE_ON,
     EVAP_ZONE_OFF,
     EVAP_ZONE_SET_MANUAL,
@@ -392,6 +394,14 @@ class RinnaiSystem:
         if self.validate_command(cmd):
             return await self.send_command(cmd.format(comfort=comfort))
         return False
+
+    async def set_evap_auto(self) -> bool:
+        """Set evaporative cooling to automatic comfort control."""
+        return await self.validate_and_send(EVAP_SET_AUTO)
+
+    async def set_evap_manual(self) -> bool:
+        """Set evaporative cooling to manual fan control."""
+        return await self.validate_and_send(EVAP_SET_MANUAL)
 
     async def turn_evap_zone_on(self, zone: str) -> bool:
         """Turn zone off in Evap mode."""
