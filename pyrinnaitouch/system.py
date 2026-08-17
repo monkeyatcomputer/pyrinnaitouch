@@ -8,7 +8,7 @@ import queue
 import threading
 import time
 from datetime import datetime
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
 
 from .const import (
     RinnaiScheduleDay,
@@ -26,6 +26,7 @@ except ImportError:
 from .pollconnection import RinnaiPollConnection
 from .event import Event
 from .system_status import RinnaiSystemStatus
+from .schedule import RinnaiSchedule, RinnaiScheduleEntry
 from .topology import RinnaiTopology, ZoneCapabilities
 from .commands import (
     EVAP_ON_CMD,
@@ -91,6 +92,9 @@ class RinnaiSystem:
         self._topology = RinnaiTopology()
         self._nosendupdates = 0
         self._schedule_lock = asyncio.Lock()
+        self._schedule_condition = threading.Condition()
+        self._schedule_generation = 0
+        self._schedule_status = None
         RinnaiSystem.instances[ip_address] = self
         self._on_updated = Event()
 
@@ -148,6 +152,7 @@ class RinnaiSystem:
                     # APS/APZ data. Preserve the last operational status until
                     # programming mode is exited and normal status resumes.
                     _LOGGER.debug("Received schedule programming status")
+                    self._record_schedule_status(new_status_json)
                 else:
                     status = RinnaiSystemStatus()
                     res = status.handle_status(new_status_json)
@@ -592,6 +597,273 @@ class RinnaiSystem:
                 )
 
             return success and exited
+
+    async def async_read_schedule(
+        self,
+        zone: str | None = None,
+        response_timeout: float = 10,
+    ) -> RinnaiSchedule:
+        """Read and return the active heating or add-on cooling schedule."""
+        # pylint: disable=too-many-locals,too-many-branches,too-many-statements
+        state = self._status
+        if state.mode not in (RinnaiSystemMode.HEATING, RinnaiSystemMode.COOLING):
+            raise ValueError(
+                "Schedules can only be read in heating or add-on cooling mode"
+            )
+
+        is_multi_set_point = state.is_multi_set_point
+        if is_multi_set_point:
+            if zone is None:
+                raise ValueError("zone is required for an MTSP schedule")
+            zone = zone.upper()
+            if not self._zone_supports(zone, "schedule"):
+                raise ValueError(f"Zone {zone} does not support schedules")
+            schedule = "APZ"
+            enter_command = ("ZV", zone)
+            exit_command = ("ZV", "N")
+        else:
+            if zone is not None:
+                raise ValueError("zone only applies to MTSP schedules")
+            schedule = "APS"
+            enter_command = ("AV", "Y")
+            exit_command = ("AV", "N")
+
+        unit_id = state.unit_status.unit_id
+        day_group = state.unit_status.schedule_day_group
+        if not unit_id or not self.validate_command(UNIT_SCHEDULE_COMMAND):
+            raise RuntimeError("The active unit does not support schedule access")
+
+        days = self._schedule_days(day_group)
+        periods = [
+            RinnaiSchedulePeriod.WAKE,
+            RinnaiSchedulePeriod.LEAVE,
+            RinnaiSchedulePeriod.RETURN,
+        ]
+        if state.unit_status.pre_sleep_enabled:
+            periods.append(RinnaiSchedulePeriod.PRE_SLEEP)
+        periods.append(RinnaiSchedulePeriod.SLEEP)
+
+        command_template = UNIT_SCHEDULE_COMMAND
+        installed_zones = tuple(
+            sorted(
+                installed_zone
+                for installed_zone in state.unit_status.zones
+                if installed_zone in {"A", "B", "C", "D"}
+            )
+        )
+
+        async with self._schedule_lock:
+            if not await self.send_command(
+                command_template.format(
+                    unit_id=unit_id,
+                    schedule=schedule,
+                    key=enter_command[0],
+                    value=enter_command[1],
+                )
+            ):
+                raise RuntimeError("The controller rejected schedule access")
+
+            entries = []
+            scan_error = None
+            try:
+                for day in days:
+                    day_command = self._schedule_day_command(day, day_group)
+                    if day_command is not None and not await self.send_command(
+                        command_template.format(
+                            unit_id=unit_id,
+                            schedule=schedule,
+                            key=day_command[0],
+                            value=day_command[1],
+                        )
+                    ):
+                        raise RuntimeError(
+                            f"The controller rejected schedule day {day.value}"
+                        )
+
+                    for period in periods:
+                        generation = self._get_schedule_generation()
+                        if not await self.send_command(
+                            command_template.format(
+                                unit_id=unit_id,
+                                schedule=schedule,
+                                key="TP",
+                                value=period.value,
+                            )
+                        ):
+                            raise RuntimeError(
+                                f"The controller rejected schedule period {period.value}"
+                            )
+
+                        matcher = self._schedule_response_matcher(
+                            unit_id,
+                            schedule,
+                            zone,
+                            day,
+                            day_group,
+                            period,
+                        )
+                        payload = await asyncio.to_thread(
+                            self._wait_for_schedule_status,
+                            generation,
+                            matcher,
+                            response_timeout,
+                        )
+                        entries.append(
+                            self._parse_schedule_entry(
+                                payload,
+                                day,
+                                period,
+                                installed_zones,
+                            )
+                        )
+            except asyncio.CancelledError as err:
+                scan_error = err
+            except Exception as err:  # pylint: disable=broad-except
+                scan_error = err
+            finally:
+                exited = await asyncio.shield(
+                    self.send_command(
+                        command_template.format(
+                            unit_id=unit_id,
+                            schedule=schedule,
+                            key=exit_command[0],
+                            value=exit_command[1],
+                        )
+                    )
+                )
+
+            if scan_error is not None:
+                raise scan_error
+            if not exited:
+                raise RuntimeError("The controller did not exit schedule access")
+
+        return RinnaiSchedule(
+            mode=state.mode,
+            day_group=day_group,
+            entries=tuple(entries),
+            temperature_unit=state.temp_unit,
+            zone=zone,
+            pre_sleep_enabled=state.unit_status.pre_sleep_enabled,
+        )
+
+    @staticmethod
+    def _schedule_days(
+        day_group: RinnaiScheduleDayGroup,
+    ) -> tuple[RinnaiScheduleDay, ...]:
+        """Return the day selectors required by a controller grouping."""
+        if day_group == RinnaiScheduleDayGroup.INDIVIDUAL:
+            return (
+                RinnaiScheduleDay.MONDAY,
+                RinnaiScheduleDay.TUESDAY,
+                RinnaiScheduleDay.WEDNESDAY,
+                RinnaiScheduleDay.THURSDAY,
+                RinnaiScheduleDay.FRIDAY,
+                RinnaiScheduleDay.SATURDAY,
+                RinnaiScheduleDay.SUNDAY,
+            )
+        if day_group == RinnaiScheduleDayGroup.WEEKDAYS_WEEKENDS:
+            return (RinnaiScheduleDay.WEEKDAYS, RinnaiScheduleDay.WEEKENDS)
+        if day_group == RinnaiScheduleDayGroup.ALL_DAYS:
+            return (RinnaiScheduleDay.ALL_DAYS,)
+        raise ValueError("The controller did not report its schedule day grouping")
+
+    def _record_schedule_status(self, status_json: Any) -> None:
+        """Publish a schedule programming frame to waiting readers."""
+        with self._schedule_condition:
+            self._schedule_generation += 1
+            self._schedule_status = status_json
+            self._schedule_condition.notify_all()
+
+    def _get_schedule_generation(self) -> int:
+        """Return the current schedule response generation."""
+        with self._schedule_condition:
+            return self._schedule_generation
+
+    def _wait_for_schedule_status(
+        self,
+        generation: int,
+        matcher: Callable[[Any], dict[str, Any] | None],
+        timeout: float,
+    ) -> dict[str, Any]:
+        """Wait synchronously for a newer matching schedule frame."""
+        deadline = time.monotonic() + timeout
+        with self._schedule_condition:
+            while True:
+                if self._schedule_generation > generation:
+                    payload = matcher(self._schedule_status)
+                    if payload is not None:
+                        return payload
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise TimeoutError("Timed out waiting for schedule data")
+                self._schedule_condition.wait(remaining)
+
+    @staticmethod
+    def _schedule_response_matcher(
+        unit_id: str,
+        schedule: str,
+        zone: str | None,
+        day: RinnaiScheduleDay,
+        day_group: RinnaiScheduleDayGroup,
+        period: RinnaiSchedulePeriod,
+    ) -> Callable[[Any], dict[str, Any] | None]:
+        """Build a matcher for one selected schedule entry."""
+        # pylint: disable=too-many-arguments,too-many-positional-arguments
+        day_command = RinnaiSystem._schedule_day_command(day, day_group)
+
+        def match(status_json: Any) -> dict[str, Any] | None:
+            if not isinstance(status_json, list):
+                return None
+            unit_data = next(
+                (
+                    part.get(unit_id)
+                    for part in status_json
+                    if isinstance(part, dict) and isinstance(part.get(unit_id), dict)
+                ),
+                None,
+            )
+            if not isinstance(unit_data, dict):
+                return None
+            payload = unit_data.get(schedule)
+            if not isinstance(payload, dict):
+                return None
+            if schedule == "APS" and payload.get("AV") != "Y":
+                return None
+            if schedule == "APZ" and payload.get("ZV") != zone:
+                return None
+            if day_command is not None and payload.get(day_command[0]) != day_command[1]:
+                return None
+            if payload.get("TP") != period.value:
+                return None
+            if "TM" not in payload or "SP" not in payload:
+                return None
+            return payload
+
+        return match
+
+    @staticmethod
+    def _parse_schedule_entry(
+        payload: dict[str, Any],
+        day: RinnaiScheduleDay,
+        period: RinnaiSchedulePeriod,
+        installed_zones: tuple[str, ...],
+    ) -> RinnaiScheduleEntry:
+        """Parse one APS/APZ programming response."""
+        try:
+            start_time = datetime.strptime(payload["TM"], "%H:%M").time()
+            temperature = int(payload["SP"])
+        except (KeyError, TypeError, ValueError) as err:
+            raise ValueError(f"Invalid schedule response: {payload}") from err
+        enabled_zones = frozenset(
+            zone for zone in installed_zones if payload.get(f"Z{zone}") == "N"
+        )
+        return RinnaiScheduleEntry(
+            day=day,
+            period=period,
+            start_time=start_time,
+            temperature=temperature,
+            enabled_zones=enabled_zones,
+        )
 
     @staticmethod
     def _schedule_day_command(

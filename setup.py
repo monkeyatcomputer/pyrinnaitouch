@@ -8,14 +8,14 @@ with open("README.md", "r") as fh:  # pylint: disable=unspecified-encoding
 setup(
     name="pyrinnaitouch",
     packages=find_packages(exclude=["tests", "tests.*"]),
-    version="0.15.3-alpha",
+    version="0.15.4-alpha",
     license="mit",
     description="A python interface to the Rinnai Touch Wifi controller",
     long_description=LONG_DESCRIPTION,
     long_description_content_type="text/markdown",
     author="Funtastix",
     url="https://github.com/monkeyatcomputer/pyrinnaitouch",
-    download_url="https://github.com/monkeyatcomputer/pyrinnaitouch/archive/refs/tags/v0.15.3-alpha.tar.gz",
+    download_url="https://github.com/monkeyatcomputer/pyrinnaitouch/archive/refs/tags/v0.15.4-alpha.tar.gz",
     keywords=[
         "Rinnai Touch",
         "Brivis",

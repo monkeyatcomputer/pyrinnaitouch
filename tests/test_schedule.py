@@ -1,6 +1,7 @@
 """Tests for heating and add-on cooling schedule programming."""
 
 import asyncio
+import threading
 from unittest.mock import AsyncMock
 
 import pytest
@@ -167,6 +168,92 @@ def test_schedule_status_frames_are_detected():
             {"HGOM": {"OOP": {"ST": "N"}, "APZ": {"ZV": "N"}}},
         ]
     )
+
+
+def test_read_mtsp_schedule_collects_every_period():
+    system = make_system(
+        multi_set_point=True,
+        day_group=RinnaiScheduleDayGroup.ALL_DAYS,
+        zones={"A"},
+    )
+    system._schedule_condition = threading.Condition()
+    system._schedule_generation = 0
+    responses = [
+        {"ZV": "A", "TP": period, "TM": start, "SP": temperature}
+        for period, start, temperature in (
+            ("W", "06:00", "20"),
+            ("L", "08:00", "00"),
+            ("R", "17:30", "22"),
+            ("P", "21:30", "19"),
+            ("S", "22:30", "17"),
+        )
+    ]
+    system._get_schedule_generation = lambda: 0
+    system._wait_for_schedule_status = lambda *_args: responses.pop(0)
+
+    schedule = asyncio.run(system.async_read_schedule(zone="A"))
+
+    assert schedule.zone == "A"
+    assert schedule.day_group == RinnaiScheduleDayGroup.ALL_DAYS
+    assert [entry.period for entry in schedule.entries] == [
+        RinnaiSchedulePeriod.WAKE,
+        RinnaiSchedulePeriod.LEAVE,
+        RinnaiSchedulePeriod.RETURN,
+        RinnaiSchedulePeriod.PRE_SLEEP,
+        RinnaiSchedulePeriod.SLEEP,
+    ]
+    assert schedule.entries[1].enabled is False
+    assert schedule.entries[2].start_time.strftime("%H:%M") == "17:30"
+    assert sent_commands(system) == [
+        '{"HGOM": {"APZ": {"ZV": "A" } } }',
+        '{"HGOM": {"APZ": {"TP": "W" } } }',
+        '{"HGOM": {"APZ": {"TP": "L" } } }',
+        '{"HGOM": {"APZ": {"TP": "R" } } }',
+        '{"HGOM": {"APZ": {"TP": "P" } } }',
+        '{"HGOM": {"APZ": {"TP": "S" } } }',
+        '{"HGOM": {"APZ": {"ZV": "N" } } }',
+    ]
+
+
+def test_schedule_response_matcher_rejects_stale_selection():
+    matcher = RinnaiSystem._schedule_response_matcher(
+        "HGOM",
+        "APZ",
+        "B",
+        RinnaiScheduleDay.WEEKDAYS,
+        RinnaiScheduleDayGroup.WEEKDAYS_WEEKENDS,
+        RinnaiSchedulePeriod.RETURN,
+    )
+
+    stale = [
+        {
+            "HGOM": {
+                "APZ": {
+                    "ZV": "B",
+                    "WD": "Y",
+                    "TP": "L",
+                    "TM": "08:00",
+                    "SP": "16",
+                }
+            }
+        }
+    ]
+    expected = [
+        {
+            "HGOM": {
+                "APZ": {
+                    "ZV": "B",
+                    "WD": "Y",
+                    "TP": "R",
+                    "TM": "17:30",
+                    "SP": "22",
+                }
+            }
+        }
+    ]
+
+    assert matcher(stale) is None
+    assert matcher(expected) == expected[0]["HGOM"]["APZ"]
     assert RinnaiSystem._is_schedule_status(
         [{"SYST": {}}, {"HGOM": {"APZ": {"ZV": "N"}}}]
     )

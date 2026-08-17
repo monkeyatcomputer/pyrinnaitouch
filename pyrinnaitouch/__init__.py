@@ -5,6 +5,7 @@
 from .system import RinnaiSystemStatus, RinnaiSystem
 from .unit_status import RinnaiUnitStatus
 from .topology import RinnaiTopology, ZoneCapabilities, ZoneControl
+from .schedule import RinnaiSchedule, RinnaiScheduleEntry
 from .const import (
     RinnaiSchedulePeriod,
     RinnaiScheduleDay,
@@ -20,6 +21,8 @@ __all__ = [
     "RinnaiCapabilities",
     "RinnaiOperatingMode",
     "RinnaiSchedulePeriod",
+    "RinnaiSchedule",
+    "RinnaiScheduleEntry",
     "RinnaiScheduleDay",
     "RinnaiScheduleDayGroup",
     "RinnaiSystem",
