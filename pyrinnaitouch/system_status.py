@@ -20,7 +20,10 @@ from .const import (
     MAIN_ZONES,
     MODULE_ENABLED,
     MULTI_SET_POINT,
+    OVERALL_SYSTEM_STATUS,
     SYSTEM,
+    SYSTEM_MODE,
+    SYSTEM_MODE_NONE,
     TEMPERATURE_UNIT,
     UNIT_FAHRENHEIT,
     WIFI_MODULE_VERSION,
@@ -96,6 +99,21 @@ class RinnaiSystemStatus():
                 _LOGGER.debug("We are in EVAP mode")
 
             else:
+                overall_status = get_attribute(
+                    system_data, OVERALL_SYSTEM_STATUS, None
+                )
+                if (
+                    isinstance(overall_status, dict)
+                    and get_attribute(overall_status, SYSTEM_MODE, None)
+                    == SYSTEM_MODE_NONE
+                ):
+                    # A controller can publish SYST by itself while no appliance mode
+                    # is selected. This is a usable system/capability snapshot; the
+                    # appliance and zone topology will arrive after a mode is selected.
+                    self.mode = RinnaiSystemMode.NONE
+                    self.unit_status = RinnaiUnitStatus()
+                    _LOGGER.debug("No active appliance mode is selected")
+                    return True
                 _LOGGER.debug("Unknown mode")
                 raise UnknownModeException("Unknown mode, this is not going well.")
 

@@ -1,6 +1,6 @@
 import json
 
-from pyrinnaitouch.const import RinnaiSystemMode
+from pyrinnaitouch.const import RinnaiCapabilities, RinnaiSystemMode
 from pyrinnaitouch.system_status import RinnaiSystemStatus
 
 def get_test_json():
@@ -42,3 +42,43 @@ def test_fault_details_are_parsed():
     assert status.fault_unit == "02"
     assert status.fault_severity == "L"
     assert status.fault_code == "35"
+
+
+def test_system_only_status_is_valid_when_no_appliance_mode_is_selected():
+    payload = [
+        {
+            "SYST": {
+                "CFG": {
+                    "MTSP": "Y",
+                    "TU": "C",
+                    "VR": "0183",
+                    "CV": "0010",
+                    "ZA": "                ",
+                    "ZB": "                ",
+                    "ZC": "                ",
+                    "ZD": "                ",
+                },
+                "AVM": {
+                    "HG": "Y",
+                    "EC": "N",
+                    "CG": "N",
+                },
+                "OSS": {"MD": "N", "AT": "999"},
+                "FLT": {"AV": "N", "C3": "000"},
+            }
+        }
+    ]
+    status = RinnaiSystemStatus()
+
+    assert status.handle_status(payload)
+    assert status.mode == RinnaiSystemMode.NONE
+    assert status.capabilities == RinnaiCapabilities.HEATER
+    assert status.is_multi_set_point
+    assert not status.has_fault
+    assert status.unit_status.zones == {}
+
+
+def test_system_only_status_still_rejects_an_unrecognised_active_mode():
+    payload = [{"SYST": {"OSS": {"MD": "?"}}}]
+
+    assert not RinnaiSystemStatus().handle_status(payload)
