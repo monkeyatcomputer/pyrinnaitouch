@@ -33,6 +33,7 @@ from .const import (
     SCHEDULE_OVERRIDE,
     SCHEDULE_DAY_GROUP,
     SCHEDULE_PERIOD,
+    SERVICE_NOTIFICATION,
     SET_POINT,
     STATE_FAN_ONLY,
     STATE_OFF,
@@ -81,6 +82,7 @@ class RinnaiUnitStatus():
         self.cooler_busy: bool = False
         self.pump_operating: bool = False
         self.fan_operating: bool = False #mtsp for heating and cooling it's per zone
+        self.service_required: bool = False
         self.zones: Dict[str, Zone] = {}
 
     def set_mode(self,mode: str) -> None:
@@ -146,6 +148,7 @@ class RinnaiUnitStatus():
         if not isinstance(unit_data, dict):
             raise ValueError(f"Status does not contain a {self.unit_id} object")
         self.set_config(get_attribute(unit_data, CONFIGURATION, None))
+        self.parse_service_notification(unit_data)
 
         if capability == RinnaiCapabilities.EVAP:
             self.parse_evap_gso(set_parent_status, unit_data)
@@ -207,6 +210,19 @@ class RinnaiUnitStatus():
 
                     zone = get_attribute(unit_data, "Z" + zoneid + "S", None)
                     self.parse_zone_state(is_multi_set_point, zoneid, zone)
+
+    def parse_service_notification(self, unit_data: Any) -> None:
+        """Parse the read-only appliance service reminder."""
+        notifications = []
+        for group_name in (OVERALL_OPERATION, GENERAL_SYSTEM_STATUS):
+            group = get_attribute(unit_data, group_name, None)
+            if isinstance(group, dict):
+                notification = get_attribute(group, SERVICE_NOTIFICATION, None)
+                if notification is not None:
+                    notifications.append(notification)
+        self.service_required = any(
+            y_n_to_bool(notification) for notification in notifications
+        )
 
     def parse_zone_state(self, is_multi_set_point: bool, zoneid: str, zone: Any) -> None:
         """Parse Zone Status"""

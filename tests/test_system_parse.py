@@ -14,6 +14,7 @@ def test_zones():
     assert status.mode == RinnaiSystemMode.COOLING
     assert not status.is_multi_set_point
     assert set(status.unit_status.zones) == {"A", "B"}
+    assert status.unit_status.service_required
 
 
 def test_status_objects_do_not_depend_on_array_order():
@@ -82,3 +83,34 @@ def test_system_only_status_still_rejects_an_unrecognised_active_mode():
     payload = [{"SYST": {"OSS": {"MD": "?"}}}]
 
     assert not RinnaiSystemStatus().handle_status(payload)
+
+
+def test_evaporative_service_notification_is_parsed_from_general_status():
+    payload = [
+        {
+            "SYST": {
+                "CFG": {"MTSP": "N", "TU": "C"},
+                "AVM": {"HG": "N", "EC": "Y", "CG": "N"},
+                "OSS": {"MD": "E"},
+                "FLT": {"AV": "N"},
+            }
+        },
+        {
+            "ECOM": {
+                "CFG": {
+                    "ZUIS": "N",
+                    "ZAIS": "N",
+                    "ZBIS": "N",
+                    "ZCIS": "N",
+                    "ZDIS": "N",
+                },
+                "GSO": {"SW": "F"},
+                "GSS": {"SN": "Y"},
+            }
+        },
+    ]
+    status = RinnaiSystemStatus()
+
+    assert status.handle_status(payload)
+    assert status.mode == RinnaiSystemMode.EVAP
+    assert status.unit_status.service_required
